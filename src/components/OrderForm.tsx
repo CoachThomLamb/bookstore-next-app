@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Book } from '@/lib/books';
+import { submitOrder } from '@/app/actions/orderActions';
 
 interface OrderFormProps {
   books: Book[];
@@ -29,6 +30,8 @@ export default function OrderForm({ books }: OrderFormProps) {
   );
   const [showModal, setShowModal] = useState(false);
   const [orderInfo, setOrderInfo] = useState<OrderInfo | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const handleQuantityChange = (code: string, value: number) => {
     setQuantities(prev => ({
@@ -79,19 +82,54 @@ export default function OrderForm({ books }: OrderFormProps) {
     setShowModal(true);
   };
 
-  const confirmOrder = () => {
-    if (orderInfo) {
-      console.log('Order confirmed:', orderInfo);
-      // TODO: Send to server/API
-      setShowModal(false);
-      alert('Thank you for your order! We will contact you shortly.');
-      // Reset form
-      window.location.reload();
+  const confirmOrder = async () => {
+    if (!orderInfo) return;
+
+    setIsSubmitting(true);
+    setSubmitMessage(null);
+
+    try {
+      const result = await submitOrder(orderInfo);
+      
+      if (result.success) {
+        setSubmitMessage({ type: 'success', text: result.message });
+        setShowModal(false);
+        
+        // Reset form after successful submission
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+      } else {
+        setSubmitMessage({ type: 'error', text: result.message });
+      }
+    } catch (error) {
+      setSubmitMessage({ 
+        type: 'error', 
+        text: 'An unexpected error occurred. Please try again.' 
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <>
+      {/* Success/Error Message */}
+      {submitMessage && (
+        <div
+          className={`mb-6 p-4 rounded-lg ${
+            submitMessage.type === 'success'
+              ? 'bg-green-50 border border-green-200 text-green-800'
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}
+        >
+          <p className="font-semibold">
+            {submitMessage.type === 'success' ? '✓ Success!' : '✗ Error'}
+          </p>
+          <p>{submitMessage.text}</p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Customer Information */}
         <div className="space-y-4">
@@ -279,15 +317,27 @@ export default function OrderForm({ books }: OrderFormProps) {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowModal(false)}
-                className="px-5 py-2 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 text-gray-800"
+                disabled={isSubmitting}
+                className="px-5 py-2 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Edit Order
               </button>
               <button
                 onClick={confirmOrder}
-                className="px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                disabled={isSubmitting}
+                className="px-5 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Confirm Order
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Sending...
+                  </>
+                ) : (
+                  'Confirm Order'
+                )}
               </button>
             </div>
           </div>
